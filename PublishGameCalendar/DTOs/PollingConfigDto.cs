@@ -1,0 +1,13 @@
+namespace AquaOs.Calendar.DTOs;
+
+public class PollingConfigDto
+{
+    public string SeriesId { get; set; } = string.Empty;
+    public string SeriesName { get; set; } = string.Empty;
+    public int IntervalHours { get; set; }
+    public DateTime? LastPolledAt { get; set; }
+    public DateTime? LastChangeAt { get; set; }
+    public bool LastPollFailed { get; set; }
+    public int? LastEventCount { get; set; }
+    public bool Enabled { get; set; }
+}

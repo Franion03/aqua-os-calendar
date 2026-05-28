@@ -1,0 +1,98 @@
+# ── AquaOS — Unified Docker Compose ──────────────────────────────
+# Start all services:  docker compose up -d
+# Start specific:       docker compose up aqua-os-backend aqua-os-crew
+# View logs:            docker compose logs -f
+
+services:
+
+  # ── API Gateway / Frontend ──────────────────────────────────────
+  aqua-os-web:
+    build:
+      context: aqua-os-web
+      dockerfile: Dockerfile
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    depends_on:
+      - aqua-os-backend
+      - aqua-os-calendar
+    restart: unless-stopped
+
+  # ── Go Backend (levels, exercises, health) ──────────────────────
+  aqua-os-backend:
+    build:
+      context: aqua-os-backend
+      dockerfile: Dockerfile
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      - PORT=8080
+      - JWT_KEY=${JWT_KEY:-CHANGE_ME_TO_A_LONG_RANDOM_SECRET_KEY_AT_LEAST_32_CHARS}
+      - JWT_ISSUER=${JWT_ISSUER:-AquaOsCalendar}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-AquaOsCalendar}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-CHANGE_ME}
+    volumes:
+      - backend-data:/app
+    restart: unless-stopped
+
+  # ── Calendar Service (C# .NET) ──────────────────────────────────
+  aqua-os-calendar:
+    build:
+      context: aqua-os-calendar
+      dockerfile: PublishGameCalendar/Dockerfile
+    ports:
+      - "${CALENDAR_PORT:-8082}:8082"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8082
+      - AWS__Region=${AWS_REGION:-eu-west-1}
+      - Jwt__Key=${JWT_KEY:-CHANGE_ME_TO_A_LONG_RANDOM_SECRET_KEY_AT_LEAST_32_CHARS}
+      - Jwt__Issuer=${JWT_ISSUER:-AquaOsCalendar}
+      - Jwt__Audience=${JWT_AUDIENCE:-AquaOsCalendar}
+      - Admin__Username=${ADMIN_USERNAME:-admin}
+      - Admin__Password=${ADMIN_PASSWORD:-CHANGE_ME}
+      - IcsFilesPath=/data/ics
+      - CREW_SERVICE_URL=http://aqua-os-crew:8001
+      # Google Calendar sync (optional)
+      - Google__ServiceAccountKeyPath=${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-}
+      # For local dev without AWS: use DynamoDB Local
+      - AWS__ServiceURL=${DYNAMODB_URL:-}
+    volumes:
+      - ics-data:/data/ics
+      - ${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-/dev/null}:/app/google-key.json:ro
+    restart: unless-stopped
+
+  # ── CrewAI Microservice (Python) ────────────────────────────────
+  aqua-os-crew:
+    build:
+      context: aqua-os-crew
+      dockerfile: Dockerfile
+    ports:
+      - "${CREW_PORT:-8001}:8001"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - CALENDAR_SERVICE_URL=http://aqua-os-calendar:8082
+      - CALENDAR_API_KEY=${CALENDAR_API_KEY:-}
+      - CALENDAR_DEFAULT_SERIES=${CALENDAR_DEFAULT_SERIES:-}
+      # Notification channels
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID:-}
+    restart: unless-stopped
+
+  # ── DynamoDB Local (dev only) ───────────────────────────────────
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    ports:
+      - "${DYNAMODB_LOCAL_PORT:-8000}:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data"
+    volumes:
+      - dynamodb-data:/home/dynamodblocal/data
+    profiles:
+      - dev
+      - full
+
+volumes:
+  backend-data:
+  ics-data:
+  dynamodb-data:
