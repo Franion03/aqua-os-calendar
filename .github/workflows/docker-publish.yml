@@ -29,7 +29,8 @@ jobs:
             type=sha,prefix=
       - uses: docker/build-push-action@v6
         with:
-          context: ./PublishGameCalendar
+          context: .
+          file: ./PublishGameCalendar/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
