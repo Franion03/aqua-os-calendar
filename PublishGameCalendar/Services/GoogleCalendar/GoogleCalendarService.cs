@@ -3,6 +3,8 @@ using Google.Apis.Calendar.v3;
 using Google.Apis.Calendar.v3.Data;
 using Google.Apis.Services;
 using AquaOs.Calendar.Domain;
+using DomainEvent = AquaOs.Calendar.Domain.Event;
+using GoogleEvent = GoogleEvent;
 
 namespace AquaOs.Calendar.Services.GoogleCalendar;
 
@@ -38,7 +40,7 @@ public class GoogleCalendarService : IGoogleCalendarService
 
     /// <inheritdoc/>
     public async Task<(int created, int updated, int deleted)> SyncAsync(
-        string googleCalendarId, List<Event> events, string seriesId)
+        string googleCalendarId, List<DomainEvent> events, string seriesId)
     {
         if (_credential == null)
             return (0, 0, 0);
@@ -46,22 +48,22 @@ public class GoogleCalendarService : IGoogleCalendarService
         CalendarService service = CreateService();
 
         // Fetch existing Google Calendar events for this series
-        List<Google.Apis.Calendar.v3.Data.Event> existing = await ListSeriesEventsAsync(service, googleCalendarId, seriesId);
+        List<GoogleEvent> existing = await ListSeriesEventsAsync(service, googleCalendarId, seriesId);
 
         // Index by UID (stored in extended property)
-        Dictionary<string, Google.Apis.Calendar.v3.Data.Event> existingByUid = new();
+        Dictionary<string, GoogleEvent> existingByUid = new();
         foreach (var ge in existing)
         {
             string? uid = ge.ExtendedProperties?.Private?["uid"];
             if (uid != null) existingByUid[uid] = ge;
         }
 
-        Dictionary<string, Event> freshByUid = events.ToDictionary(e => e.Uid);
+        Dictionary<string, DomainEvent> freshByUid = events.ToDictionary(e => e.Uid);
 
         int created = 0, updated = 0, deleted = 0;
 
         // Create or update
-        foreach (Event ev in events)
+        foreach (DomainEvent ev in events)
         {
             if (existingByUid.TryGetValue(ev.Uid, out var ge))
             {
@@ -114,10 +116,10 @@ public class GoogleCalendarService : IGoogleCalendarService
         });
     }
 
-    private async Task<List<Google.Apis.Calendar.v3.Data.Event>> ListSeriesEventsAsync(
+    private async Task<List<GoogleEvent>> ListSeriesEventsAsync(
         CalendarService service, string calendarId, string seriesId)
     {
-        List<Google.Apis.Calendar.v3.Data.Event> all = new();
+        List<GoogleEvent> all = new();
         string? pageToken = null;
 
         do
@@ -138,7 +140,7 @@ public class GoogleCalendarService : IGoogleCalendarService
     }
 
     private async Task CreateEventAsync(
-        CalendarService service, string calendarId, Event ev, string seriesId)
+        CalendarService service, string calendarId, DomainEvent ev, string seriesId)
     {
         var ge = MapToGoogleEvent(ev, seriesId);
         var request = service.Events.Insert(ge, calendarId);
@@ -147,7 +149,7 @@ public class GoogleCalendarService : IGoogleCalendarService
 
     private async Task UpdateEventAsync(
         CalendarService service, string calendarId,
-        Google.Apis.Calendar.v3.Data.Event existing, Event ev, string seriesId)
+        GoogleEvent existing, DomainEvent ev, string seriesId)
     {
         var ge = MapToGoogleEvent(ev, seriesId);
         var request = service.Events.Update(ge, calendarId, existing.Id);
@@ -155,15 +157,15 @@ public class GoogleCalendarService : IGoogleCalendarService
     }
 
     private async Task DeleteEventAsync(
-        CalendarService service, string calendarId, Google.Apis.Calendar.v3.Data.Event ge)
+        CalendarService service, string calendarId, GoogleEvent ge)
     {
         var request = service.Events.Delete(calendarId, ge.Id);
         await request.ExecuteAsync();
     }
 
-    private static Google.Apis.Calendar.v3.Data.Event MapToGoogleEvent(Event ev, string seriesId)
+    private static GoogleEvent MapToGoogleEvent(DomainEvent ev, string seriesId)
     {
-        return new Google.Apis.Calendar.v3.Data.Event
+        return new GoogleEvent
         {
             Summary = ev.Title,
             Description = ev.Description,
@@ -178,7 +180,7 @@ public class GoogleCalendarService : IGoogleCalendarService
                 DateTimeDateTimeOffset = new DateTimeOffset(ev.End, TimeSpan.Zero),
                 TimeZone = "UTC",
             },
-            ExtendedProperties = new Event.ExtendedPropertiesData
+            ExtendedProperties = new GoogleEvent.ExtendedPropertiesData
             {
                 Private__ = new Dictionary<string, string>
                 {
@@ -189,7 +191,7 @@ public class GoogleCalendarService : IGoogleCalendarService
         };
     }
 
-    private static bool EventChanged(Google.Apis.Calendar.v3.Data.Event ge, Event ev)
+    private static bool EventChanged(GoogleEvent ge, DomainEvent ev)
     {
         DateTime? geStart = ge.Start?.DateTimeDateTimeOffset?.UtcDateTime;
         DateTime? geEnd = ge.End?.DateTimeDateTimeOffset?.UtcDateTime;
