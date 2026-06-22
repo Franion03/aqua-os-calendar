@@ -4,7 +4,7 @@ using Google.Apis.Calendar.v3.Data;
 using Google.Apis.Services;
 using AquaOs.Calendar.Domain;
 using DomainEvent = AquaOs.Calendar.Domain.Event;
-using GoogleEvent = GoogleEvent;
+using GoogleEvent = Google.Apis.Calendar.v3.Data.Event;
 
 namespace AquaOs.Calendar.Services.GoogleCalendar;
 
