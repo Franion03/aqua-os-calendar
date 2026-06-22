@@ -1,0 +1,45 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t aqua-os-calendar:test ./PublishGameCalendar
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: aqua-os-calendar:test
+          format: table
+          exit-code: "0"
+          severity: CRITICAL,HIGH
+
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t aqua-os-calendar:test ./PublishGameCalendar
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: aqua-os-calendar:test
+          artifact-name: sbom-aqua-os-calendar.spdx.json
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: detect --source .
